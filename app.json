@@ -3,6 +3,9 @@
     "name": "IronForge",
     "slug": "ironforge",
     "version": "1.0.0",
+    "experiments": {
+      "baseUrl": "/IronForge"
+    },
     "web": {
       "bundler": "metro"
     }

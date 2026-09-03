@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from './firebaseConfig';
 
 interface ExerciseSet {
   id: string;
@@ -374,7 +376,6 @@ function ForgeLogo({ size = 140, themeColor = '#FF6B00' }: { size?: number; them
   );
 }
 
-// Function declarations that were missing in previous iteration
 const handleAddNewCustomExerciseHelper = (name: string, muscle: string, catalog: typeof DEFAULT_EXERCISES, setCatalog: React.Dispatch<React.SetStateAction<typeof DEFAULT_EXERCISES>>, setName: React.Dispatch<React.SetStateAction<string>>) => {
   if (!name.trim()) return;
   const newEx = {
@@ -388,7 +389,7 @@ const handleAddNewCustomExerciseHelper = (name: string, muscle: string, catalog:
 };
 
 export default function App() {
-  const [view, setView] = useState<'welcome' | 'welcomeBack' | 'onboarding' | 'postOnboarding' | 'dashboard' | 'create' | 'active'>('welcome');
+  const [view, setView] = useState<'welcome' | 'auth' | 'welcomeBack' | 'onboarding' | 'postOnboarding' | 'dashboard' | 'create' | 'active'>('welcome');
   const [activeTab, setActiveTab] = useState<'home' | 'routines' | 'templates' | 'history' | 'profile'>('home');
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [history, setHistory] = useState<WorkoutSessionLog[]>([]);
@@ -868,7 +869,7 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.background }]}>
       {/* Curved Vignette */}
-      {view !== 'welcome' && view !== 'welcomeBack' && view !== 'onboarding' && view !== 'postOnboarding' && (
+      {view !== 'welcome' && view !== 'auth' && view !== 'welcomeBack' && view !== 'onboarding' && view !== 'postOnboarding' && (
         <>
           <View pointerEvents="none" style={[styles.vignetteLayer1, { borderColor: activeTheme.primary + (currentTheme.isDark ? '18' : '0C') }]} />
           <View pointerEvents="none" style={[styles.vignetteLayer2, { borderColor: activeTheme.primary + (currentTheme.isDark ? '0E' : '08') }]} />
@@ -889,12 +890,17 @@ export default function App() {
               <Text style={[styles.homeQuoteText, { color: currentTheme.textSecondary }]}>"Welcome to the Forge. Let's lift some Iron."</Text>
             </View>
             <View style={styles.homeBottomBtnContainer}>
-              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: activeTheme.primary, paddingVertical: 18, justifyContent: 'center' }]} onPress={() => navigateToView('onboarding')} activeOpacity={0.85}>
-                <Text style={{ color: '#FFF', fontSize: 17, fontWeight: '900', letterSpacing: 0.5 }}>Begin Profile Setup</Text>
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: activeTheme.primary, paddingVertical: 18, justifyContent: 'center' }]} onPress={() => navigateToView('auth')} activeOpacity={0.85}>
+                <Text style={{ color: '#FFF', fontSize: 17, fontWeight: '900', letterSpacing: 0.5 }}>Login / Create Account</Text>
                 <Ionicons name="arrow-forward" size={20} color="#FFF" style={{ marginLeft: 8 }} />
               </TouchableOpacity>
             </View>
           </View>
+        )}
+
+        {/* AUTHENTICATION SCREEN */}
+        {view === 'auth' && (
+          <InlineAuthScreen onAuthSuccess={() => navigateToView('onboarding')} />
         )}
 
         {/* WELCOME BACK SCREEN */}
@@ -1609,7 +1615,20 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name="timer-outline" size={16} color={activeTheme.primary} style={{ marginRight: 6 }} /><Text style={[styles.restSelectorTitle, { color: currentTheme.textSecondary }]}>Auto-Rest:</Text></View>
               <View style={styles.restOptionsRow}>
                 {REST_OPTIONS.map((sec) => (
-                  <TouchableOpacity key={sec} style={[styles.restOptionBtn, { backgroundColor: currentTheme.cardBgAlt, borderColor: currentTheme.border }, selectedRestDuration === sec && [styles.restOptionBtnActive, { backgroundColor: activeTheme.primary, borderColor: activeTheme.primary }]]} onPress={() => { setSelectedRestDuration(sec); if (restSecondsLeft !== null) { setRestSecondsLeft(sec); } }}>
+                  <TouchableOpacity 
+                    key={sec} 
+                    style={[
+                      styles.restOptionBtn, 
+                      { backgroundColor: currentTheme.cardBgAlt, borderColor: currentTheme.border }, 
+                      selectedRestDuration === sec ? styles.restOptionBtnActive : null
+                    ]} 
+                    onPress={() => { 
+                      setSelectedRestDuration(sec); 
+                      if (restSecondsLeft !== null) { 
+                        setRestSecondsLeft(sec); 
+                      } 
+                    }}
+                  >
                     <Text style={[styles.restOptionBtnText, selectedRestDuration === sec && styles.restOptionBtnTextActive]}>{sec}s</Text>
                   </TouchableOpacity>
                 ))}
@@ -1658,7 +1677,9 @@ export default function App() {
                           <TextInput style={{ textAlign: 'center', padding: 8, borderRadius: 6, marginHorizontal: 3, fontSize: 15, backgroundColor: currentTheme.cardBgAlt, color: activeTheme.primaryLight, width: 45 }} keyboardType="numeric" placeholder="-" placeholderTextColor="#555" defaultValue={set.rpe ? String(set.rpe) : ''} onChangeText={(val) => updateActiveSet(exIdx, sIdx, 'rpe', val)} />
                           
                           <View style={{ alignItems: 'center', justifyContent: 'center', width: 50 }}><Text style={{ fontSize: 13, fontWeight: 'bold', color: currentTheme.textSecondary }}>{estimated1RM > 0 ? String(estimated1RM ?? '') : '—'}</Text></View>
-                          <TouchableOpacity style={[{ height: 36, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginHorizontal: 3, backgroundColor: currentTheme.cardBgAlt, width: 40 }, set.completed && styles.checkBtnActive, isLocked && [styles.checkBtnLocked, { backgroundColor: currentTheme.cardBgAlt, borderColor: currentTheme.border }]]} onPress={() => toggleSetComplete(exIdx, sIdx)}><Ionicons name={set.completed ? 'checkmark' : isLocked ? 'lock-closed' : 'checkmark'} size={isLocked ? 14 : 18} color={set.completed ? '#FFF' : isLocked ? '#666' : '#444'} /></TouchableOpacity>
+                          <TouchableOpacity style={[styles.checkBtnLocked, set.completed && styles.checkBtnActive, isLocked && { backgroundColor: currentTheme.cardBgAlt, borderColor: currentTheme.border }]} onPress={() => toggleSetComplete(exIdx, sIdx)}>
+                            <Ionicons name={set.completed ? 'checkmark' : isLocked ? 'lock-closed' : 'checkmark'} size={isLocked ? 14 : 18} color={set.completed ? '#FFF' : isLocked ? '#666' : '#444'} />
+                          </TouchableOpacity>
                         </View>
                       );
                     })}
@@ -2000,6 +2021,75 @@ export default function App() {
   );
 }
 
+// Inline Auth Screen Component
+function InlineAuthScreen({ onAuthSuccess }: { onAuthSuccess: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleLogin = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      onAuthSuccess();
+    } catch (error: any) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      onAuthSuccess();
+    } catch (error: any) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#09090D', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 32, fontWeight: '900', color: '#FF6B00', marginBottom: 6, letterSpacing: 2 }}>IRONFORGE</Text>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: '#8E8E98', marginBottom: 30, textTransform: 'uppercase', letterSpacing: 2 }}>Enter the Vault</Text>
+
+      {errorMessage ? <Text style={{ color: '#FF3B30', marginBottom: 15, textAlign: 'center' }}>{errorMessage}</Text> : null}
+
+      <TextInput
+        style={{ width: '100%', maxWidth: 400, backgroundColor: '#18181D', color: '#FFF', borderRadius: 8, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#262634' }}
+        placeholder="Email Address"
+        placeholderTextColor="#888"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+      />
+      <TextInput
+        style={{ width: '100%', maxWidth: 400, backgroundColor: '#18181D', color: '#FFF', borderRadius: 8, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#262634' }}
+        placeholder="Password"
+        placeholderTextColor="#888"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+
+      <TouchableOpacity style={{ width: '100%', maxWidth: 400, backgroundColor: '#FF6B00', padding: 16, borderRadius: 8, alignItems: 'center', marginBottom: 12 }} onPress={handleLogin}>
+        <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>Log In</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={{ width: '100%', maxWidth: 400, padding: 16, borderRadius: 8, alignItems: 'center', borderWidth: 1.5, borderColor: '#FF6B00' }} onPress={handleSignUp}>
+        <Text style={{ color: '#FF6B00', fontSize: 16, fontWeight: 'bold' }}>Create Account</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative', overflow: 'hidden' },
   inner: { flex: 1, padding: 16, paddingBottom: 0, zIndex: 3 },
@@ -2165,7 +2255,7 @@ const styles = StyleSheet.create({
   restSelectorTitle: { fontSize: 13, fontWeight: '600' },
   restOptionsRow: { flexDirection: 'row', alignItems: 'center' },
   restOptionBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 6, marginLeft: 6, borderWidth: 1 },
-  restOptionBtnActive: {},
+  restOptionBtnActive: { backgroundColor: '#FF6B00', borderColor: '#FF6B00' },
   restOptionBtnText: { fontSize: 12, fontWeight: 'bold' },
   restOptionBtnTextActive: { color: '#FFF' },
 
@@ -2193,7 +2283,7 @@ const styles = StyleSheet.create({
   setRowInteractive: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderRadius: 6, marginVertical: 2 },
   setRowCompleted: { backgroundColor: '#172B1C' },
   checkBtnActive: { backgroundColor: '#34C759' },
-  checkBtnLocked: { borderWidth: 1 },
+  checkBtnLocked: { height: 36, borderRadius: 6, justifyContent: 'center', alignItems: 'center', marginHorizontal: 3, backgroundColor: '#18181D', width: 40, borderWidth: 1, borderColor: '#262634' },
 
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   modalSub: { fontSize: 13, marginTop: 2 },
